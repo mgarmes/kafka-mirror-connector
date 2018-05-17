@@ -38,30 +38,39 @@ import java.util.Map;
 public class MirrorSourceTaskConfig extends MirrorSourceConnectorConfig {
 
 
-    private static final String PARTITION_CONFIG = "partitions";
+    public static final String PARTITION_CONFIG = "task.partitions";
     private static final String PARTITION_DOC = "List of Partition to be mirrored.";
+    public static final String ID_CONFIG = "task.id";
+    private static final String ID_DOC = "task id (we be used as consumer client.id)";
 
     private static final ConfigDef config = baseConfigDef().define(PARTITION_CONFIG,
             ConfigDef.Type.STRING,
             ConfigDef.Importance.HIGH,
-            PARTITION_DOC);
+            PARTITION_DOC).define(ID_CONFIG,
+            ConfigDef.Type.STRING,
+            ConfigDef.Importance.HIGH,
+            ID_DOC);
 
     public MirrorSourceTaskConfig(Map<String, String> properties) {
         super(config, properties);
     }
 
-
-    public static MirrorSourceTaskConfig create(MirrorSourceConnectorConfig config,
-                                                PartitionAssignor.Assignment assignment) {
-        Map configCopy = new HashMap(config.originalsStrings());
-        configCopy.put(PARTITION_CONFIG, ConnectHelper.encodeTaskPartitions(assignment));
-
-        return new MirrorSourceTaskConfig(configCopy);
-    }
-
-
     public PartitionAssignor.Assignment getPartitions() {
         return ConnectHelper.decodeTaskPartition(getString(PARTITION_CONFIG));
     }
+
+    public String getId() {
+        return getString(ID_CONFIG);
+    }
+
+
+    public static MirrorSourceTaskConfig create(MirrorSourceConnectorConfig config,
+                                                PartitionAssignor.Assignment assignment, String id) {
+        Map configCopy = new HashMap(config.originalsStrings());
+        configCopy.put(PARTITION_CONFIG, ConnectHelper.encodeTaskPartitions(assignment));
+        configCopy.put(ID_CONFIG, id);
+        return new MirrorSourceTaskConfig(configCopy);
+    }
+
 
 }

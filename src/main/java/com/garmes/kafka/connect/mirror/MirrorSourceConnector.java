@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -78,7 +79,11 @@ public class MirrorSourceConnector extends SourceConnector {
         List<Map<String, String>> taskConfigs = new ArrayList();
         Map<String, PartitionAssignor.Assignment> tasksPartitions = this.monitor.getTasksPartitions(maxTasks);
         for (Map.Entry<String, PartitionAssignor.Assignment> task : tasksPartitions.entrySet()) {
-            MirrorSourceTaskConfig taskConfig = MirrorSourceTaskConfig.create(this.config, task.getValue());
+
+            MirrorSourceTaskConfig taskConfig = MirrorSourceTaskConfig.create(this.config,
+                    task.getValue(),
+                    String.format("%s-%s",this.config.getConnectorName(), task.getKey()));
+
             taskConfigs.add(taskConfig.originalsStrings());
         }
         return taskConfigs;

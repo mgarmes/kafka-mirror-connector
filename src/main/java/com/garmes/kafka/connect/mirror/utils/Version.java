@@ -28,11 +28,33 @@
 
 package com.garmes.kafka.connect.mirror.utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Properties;
+
 public class Version {
 
-    private static final String VERSION = "1.0.0";
+    private static final Logger LOG = LoggerFactory.getLogger(Version.class);
+    private static String version = "unknown";
+    private static String file = "/kafka-mirror-version.properties";
+
+    static {
+        try {
+            Properties props = new Properties();
+            props.load(Version.class.getResourceAsStream(file));
+            version = props.getProperty("version", version).trim();
+        } catch (Exception e) {
+            LOG.warn("Error while loading: "+file, e);
+        }
+    }
 
     public static String getVersion() {
-        return VERSION;
+        return version;
+    }
+
+
+    public static void main(String[] args){
+        LOG.info(Version.getVersion());
     }
 }

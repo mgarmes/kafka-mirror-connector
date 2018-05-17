@@ -36,8 +36,6 @@ import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -57,43 +55,44 @@ public class Monitor extends Thread implements Runnable {
     private ConnectorContext context;
     private Consumer<byte[], byte[]> src_consumer;
     private Consumer<byte[], byte[]> dest_consumer;
-    private Set<String> whitelistTopics;
+    private Set<String> whiteListTopics;
     private Pattern topicPattern;
-    private Set<String> blacklistTopics;
+    private Set<String> blackListTopics;
     private long pollIntervalMs;
     private final PartitionAssignor assignor = new RoundRobinAssignor();
-    private final CountDownLatch firstRefreshLatch = new CountDownLatch(1);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     private volatile Map<String, List<PartitionInfo>> src_cluster_topics = null;
     private volatile Map<String, List<PartitionInfo>> dest_cluster_topics = null;
 
-    private Monitor(ConnectorContext context,
-                    Set<String> whitelistTopics,
-                    Pattern topicPattern,
-                    Set<String> blacklistTopics,
-                    int pollIntervalMs,
-                    Consumer<byte[], byte[]> src_consumer_crawler,
-                    Consumer<byte[], byte[]> dest_consumer_crawler,
-                    String rename_format,
-                    Boolean preservePartition) {
-
-        this.context = context;
-        this.whitelistTopics = whitelistTopics;
-        this.topicPattern = topicPattern;
-        this.blacklistTopics = blacklistTopics;
-        this.pollIntervalMs = pollIntervalMs;
-        this.src_consumer = src_consumer_crawler;
-        this.dest_consumer = dest_consumer_crawler;
-        this.TOPIC_RENAME_FORMAT_CONFIG = rename_format;
-        this.preservePartition = preservePartition;
+    private Monitor(ConnectorContext context_,
+                    String connectorName_,
+                    Set<String> blackListTopics_,
+                    Set<String> whiteListTopics_,
+                    Pattern topicPattern_,
+                    int pollIntervalMs_,
+                    Consumer<byte[], byte[]> src_consumer_crawler_,
+                    Consumer<byte[], byte[]> dest_consumer_crawler_,
+                    String rename_format_,
+                    Boolean preservePartition_) {
+        //rename the thread for best monitoring
+        super(connectorName_+"monitor");
+        this.context = context_;
+        this.whiteListTopics = whiteListTopics_;
+        this.topicPattern = topicPattern_;
+        this.blackListTopics = blackListTopics_;
+        this.pollIntervalMs = pollIntervalMs_;
+        this.src_consumer = src_consumer_crawler_;
+        this.dest_consumer = dest_consumer_crawler_;
+        this.TOPIC_RENAME_FORMAT_CONFIG = rename_format_;
+        this.preservePartition = preservePartition_;
     }
 
     public Monitor(ConnectorContext context, MirrorSourceConnectorConfig config) {
-        this(context,
-                config.getTopics(),
+        this(context,config.getConnectorName(),
+                config.getBlackListTopics(),
+                config.getWhiteListTopics(),
                 config.getTopicPattern(),
-                config.getBlacklistTopics(),
                 config.getTopicPollIntervalMs(),
                 buildSrcConsumerCrawler(config),
                 buildDestConsumerCrawler(config),
@@ -134,16 +133,14 @@ public class Monitor extends Thread implements Runnable {
         int numTasks = Math.min(numPartitionsToAssign(this.src_cluster_topics), maxTasks);
 
         //use the consumer assignor instead of 'ConnectorUtils.groupPartitions'
-        List<String> topics = new ArrayList(this.src_cluster_topics.keySet());
+        List<String> topics = new ArrayList<String>(this.src_cluster_topics.keySet());
         Cluster cluster = clusterMetadata(this.src_cluster_topics);
-        Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap(numTasks);
+        Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>(numTasks);
         for (int i = 0; i < numTasks; i++) {
             subscriptions.put(String.format("task-%d", i), new PartitionAssignor.Subscription(topics));
         }
         // find the example at org.apache.kafka.common.TopicPartition.RoundRobinAssignorTest
-        Map<String, PartitionAssignor.Assignment> assignments = this.assignor.assign(cluster, subscriptions);
-
-        return assignments;
+       return this.assignor.assign(cluster, subscriptions);
     }
 
     public void start() {
@@ -216,6 +213,7 @@ public class Monitor extends Thread implements Runnable {
 
     private boolean matchesPartitions(Map<String, List<PartitionInfo>> topicMetadataA,
                                       Map<String, List<PartitionInfo>> topicMetadataB) {
+        if(topicMetadataA == null ) return false;
         if (topicMetadataA.size() != topicMetadataB.size()) {
             return false;
         }
@@ -285,8 +283,8 @@ public class Monitor extends Thread implements Runnable {
 
     // cluster metadata will be used only with the assignor
     private Cluster clusterMetadata(Map<String, List<PartitionInfo>> srcTopics) {
-        Set<Node> nodes = new HashSet();
-        List<PartitionInfo> partitionInfos = new ArrayList();
+        Set<Node> nodes = new HashSet<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>();
         for (Map.Entry<String, List<PartitionInfo>> topicEntry : srcTopics.entrySet()) {
             partitionInfos.addAll(topicEntry.getValue());
             for (PartitionInfo partitionInfo : topicEntry.getValue()) {
@@ -304,11 +302,11 @@ public class Monitor extends Thread implements Runnable {
 
     private Map<String, List<PartitionInfo>> listMatchingTopics() {
         Map<String, List<PartitionInfo>> topicMetadata = this.src_consumer.listTopics();
-        Map<String, List<PartitionInfo>> matchingTopics = new HashMap();
+        Map<String, List<PartitionInfo>> matchingTopics = new HashMap<>();
         for (Map.Entry<String, List<PartitionInfo>> topicEntry : topicMetadata.entrySet()) {
             String topic = topicEntry.getKey();
-            if (!this.blacklistTopics.contains(topic)) {
-                if ((this.whitelistTopics.contains(topic)) || ((!ConnectHelper.isInternalTopic(topic)) && (matchesTopicPattern(topic)))) {
+            if (!this.blackListTopics.contains(topic)) {
+                if ((this.whiteListTopics.contains(topic)) || ((!ConnectHelper.isInternalTopic(topic)) && (matchesTopicPattern(topic)))) {
                     matchingTopics.put(topic, topicEntry.getValue());
                 }
             }
@@ -322,22 +320,22 @@ public class Monitor extends Thread implements Runnable {
 
     // used just to get Topic Partitions metadata
     private static KafkaConsumer<byte[], byte[]> buildSrcConsumerCrawler(MirrorSourceConnectorConfig config) {
-        Map<String, Object> consumerConfig = new HashMap();
+        Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.putAll(config.getSrcConsumerConfigs());
         if (!consumerConfig.containsKey("client.id")) {
-            consumerConfig.put("client.id", "kafka-mirror-src");
+            consumerConfig.put("client.id", config.getConnectorName()+"-kafka-src-monitor");
         }
-        return new KafkaConsumer(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     // used just to get Topic Partitions metadata
     private static KafkaConsumer<byte[], byte[]> buildDestConsumerCrawler(MirrorSourceConnectorConfig config) {
-        Map<String, Object> consumerConfig = new HashMap();
+        Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.putAll(config.getDestConsumerConfigs());
         if (!consumerConfig.containsKey("client.id")) {
-            consumerConfig.put("client.id", "kafka-mirror-dest");
+            consumerConfig.put("client.id",config.getConnectorName()+"-kafka-dest-monitor");
         }
-        return new KafkaConsumer(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 }
 

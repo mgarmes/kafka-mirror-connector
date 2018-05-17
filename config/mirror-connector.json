@@ -1,0 +1,14 @@
+{
+  "name": "dc1-to-dc2",
+  "config": {
+    "connector.class": "com.garmes.kafka.connect.mirror.MirrorSourceConnector",
+    "tasks.max": "2",
+    "key.converter":"com.garmes.kafka.connect.mirror.utils.ByteArrayConverter",
+    "value.converter":"com.garmes.kafka.connect.mirror.utils.ByteArrayConverter",
+    "key.converter.schemas.enable":"false",
+    "value.converter.schemas.enable":"false",
+    "src.kafka.bootstrap.servers": "kafka_dc1:9092",
+    "dest.kafka.bootstrap.servers": "kafka_dc2:9092",
+    "topic.whitelist": "test"
+  }
+}

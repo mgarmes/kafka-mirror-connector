@@ -91,7 +91,7 @@ public class MirrorSourceTask extends SourceTask {
                 return Collections.emptyList();
             }
             boolean preservePartitions = this.config.getTopicPreservePartitions();
-            List<SourceRecord> sourceRecords = new ArrayList(records.count());
+            List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (Iterator i$ = records.partitions().iterator(); i$.hasNext(); ) {
                 TopicPartition topicPartition = (TopicPartition) i$.next();
                 String sourceTopic = topicPartition.topic();
@@ -165,13 +165,11 @@ public class MirrorSourceTask extends SourceTask {
                 log.debug("No offset Founded for {}, seek to the beginning ", partition);
                 this.consumer.seekToBeginning(Collections.singleton(partition));
             } else {
-                long offset = ((Long) connectSourceOffset.get("offset")).longValue();
+                long offset = (Long) connectSourceOffset.get("offset");
                 log.debug("Use committed offset {} for partition {}", offset, partition);
                 this.consumer.seek(partition, offset + 1L);
             }
-
         }
-
     }
 
     private Consumer<byte[], byte[]> buildConsumer(MirrorSourceTaskConfig config) {
@@ -187,10 +185,12 @@ public class MirrorSourceTask extends SourceTask {
          if (!consumerConfig.containsKey("client.id")) {
             consumerConfig.put("client.id", "kafka-mirror-client");
         }
-         */
-        //TODO
+
         Random randomGenerator = new Random();
         consumerConfig.put("client.id", "kafka-mirror-client"+randomGenerator.nextInt(1000));
+         */
+
+        consumerConfig.put("client.id", this.config.getId());
         consumerConfig.put("enable.auto.commit", false);
         consumerConfig.put("auto.offset.reset", "none");
         return new KafkaConsumer(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
@@ -202,7 +202,4 @@ public class MirrorSourceTask extends SourceTask {
         return ConnectHelper.renameTopic(this.config.getTopicRenameFormat(), sourceTopic);
     }
 
-    private TopicPartition toDestPartition(TopicPartition sourcePartition) {
-        return new TopicPartition(toDestTopic(sourcePartition.topic()), sourcePartition.partition());
-    }
 }

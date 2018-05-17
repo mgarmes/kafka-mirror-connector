@@ -28,6 +28,7 @@
 
 package com.garmes.kafka.connect.mirror;
 
+import com.garmes.kafka.connect.mirror.utils.ByteArrayConverter;
 import com.garmes.kafka.connect.mirror.utils.ConnectHelper;
 import com.garmes.kafka.connect.mirror.utils.RegexValidator;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -59,6 +60,10 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
         defineConsumersConf(DESTINATION_PREFIX, DEST_CONSUMER_PREFIX,config);
         return config;
     }
+
+    public static final String CONNECTOR_NAME_CONFIG = "name";
+    public static final String CONNECTOR_NAME_DOC = "Unique connector name";
+    public static final String CONNECTOR_NAME_DISPLAY = "connector name";
 
     public static final String TOPIC_WHITELIST_CONFIG = "topic.whitelist";
     public static final String TOPIC_WHITELIST_DOC = "Whitelist of topics to be mirrored.";
@@ -106,6 +111,16 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
         int orderInGroup = 0;
         String group;
 
+        group = "connector";
+        configDef.define(CONNECTOR_NAME_CONFIG,
+                ConfigDef.Type.STRING,
+                ConfigDef.Importance.HIGH,
+                CONNECTOR_NAME_DOC,
+                group,
+                ++orderInGroup,
+                ConfigDef.Width.NONE,
+                CONNECTOR_NAME_DISPLAY);
+
         group = "Source Topics";
         configDef.define(
                 TOPIC_WHITELIST_CONFIG,
@@ -146,7 +161,7 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
                 TOPIC_POLL_INTERVAL_MS_CONFIG,
                 ConfigDef.Type.INT,
                 TOPIC_POLL_INTERVAL_MS_DEFAULT,
-                ConfigDef.Range.atLeast(Integer.valueOf(0)),
+                ConfigDef.Range.atLeast(0),
                 ConfigDef.Importance.LOW,
                 TOPIC_POLL_INTERVAL_MS_DOC,
                 group,
@@ -183,16 +198,19 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
 
 
     // Getters
+
+    public String getConnectorName(){ return  getString(CONNECTOR_NAME_CONFIG); }
+
     public Pattern getTopicPattern() {
         String regex = getString(TOPIC_REGEX_CONFIG);
         return regex == null ? null : Pattern.compile(regex);
     }
 
-    public Set<String> getTopics() {
+    public Set<String> getWhiteListTopics() {
         return new HashSet(getList(TOPIC_WHITELIST_CONFIG));
     }
 
-    public Set<String> getBlacklistTopics() {
+    public Set<String> getBlackListTopics() {
         return new HashSet(getList(TOPIC_BLACKLIST_CONFIG));
     }
 

@@ -13,29 +13,13 @@ mvn clean package
 #### connect standalone
 
 ```bash
-
-echo "
-# basic connector configuration
-connector.name = dc1-to-dc2
-connector.class = com.garmes.kafka.connect.mirror.MirrorSourceConnector
-
-# source cluster connection info
-src.kafka.bootstrap.servers = kafka_dc1:9092
-
-# destination cluster connection info
-dest.kafka.bootstrap.servers = kafka_dc2:9092
-
-# configure mirrored topics
-topic.whitelist = test
-
-" > mirror.properties
-
-./bin/connect-standalone.sh ../config/connect-standalone.properties  mirror.properties
+./bin/connect-standalone.sh config/connect-standalone.properties  mirror-connector.properties
 ```
 
 #### connect distributed
 ```bash
- curl -X POST -H "Content-Type: application/json" --data '{"name": "dc1-to-dc2", "config": {"connector.class":"com.garmes.kafka.connect.mirror.MirrorSourceConnector", "tasks.max":"2", "src.kafka.bootstrap.servers":"kafka_dc1:9092", "dest.kafka.bootstrap.servers":"kafka_dc2:9092","topic.whitelist":"test"  }}' http://localhost:8083/connectors
+./bin/connect-standalone.sh config/connect-distributed.properties
+ curl -X POST -H "Content-Type: application/json" -d @mirror-connector.json  http://localhost:8083/connectors
 ```
 
 ### Configuration
