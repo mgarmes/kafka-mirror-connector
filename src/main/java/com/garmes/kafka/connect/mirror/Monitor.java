@@ -103,11 +103,12 @@ public class Monitor extends Thread implements Runnable {
 
 
     public synchronized Map<String, PartitionAssignor.Assignment> getTasksPartitions(int maxTasks) {
-        final long timeout = 10000L;
+        final long timeout = 30000L;
         long started = System.currentTimeMillis();
         long now = started;
         while (this.src_cluster_topics == null && now - started < timeout) {
             try {
+                LOG.info("wait fro "+ (timeout - (now - started)));
                 wait(timeout - (now - started));
             } catch (InterruptedException e) {
                 LOG.error(e.getMessage(),e);
@@ -195,7 +196,7 @@ public class Monitor extends Thread implements Runnable {
             for (String topic : this.dest_cluster_topics.keySet()) {
                 sb.append(String.format("%s, ", topic));
             }
-            LOG.debug(sb.toString());
+            LOG.info(sb.toString());
         }
         removeNonExistingPartitions(updatedTopics, this.dest_cluster_topics);
         Map<String, List<PartitionInfo>> currentTopics = this.src_cluster_topics;
@@ -302,15 +303,37 @@ public class Monitor extends Thread implements Runnable {
 
     private Map<String, List<PartitionInfo>> listMatchingTopics() {
         Map<String, List<PartitionInfo>> topicMetadata = this.src_consumer.listTopics();
+        LOG.info("src topicMetadata size: "+topicMetadata.size());
         Map<String, List<PartitionInfo>> matchingTopics = new HashMap<>();
         for (Map.Entry<String, List<PartitionInfo>> topicEntry : topicMetadata.entrySet()) {
             String topic = topicEntry.getKey();
-            if (!this.blackListTopics.contains(topic)) {
-                if ((this.whiteListTopics.contains(topic)) || ((!ConnectHelper.isInternalTopic(topic)) && (matchesTopicPattern(topic)))) {
-                    matchingTopics.put(topic, topicEntry.getValue());
-                }
+
+            if (ConnectHelper.isInternalTopic(topic)) {
+                LOG.info(topic+" is an Internal Topic.");
+                continue;
             }
+
+            if (this.blackListTopics.contains(topic)){
+                LOG.info(topic+" is back listed.");
+                continue;
+            }
+
+            if (this.whiteListTopics.contains(topic)){
+                LOG.info(topic+" is white listed.");
+                matchingTopics.put(topic, topicEntry.getValue());
+                continue;
+            }
+
+            if (matchesTopicPattern(topic)) {
+                LOG.info(topic+" match the regex.");
+                matchingTopics.put(topic, topicEntry.getValue());
+                continue;
+            }
+
+            LOG.info(topic+" does't match any case.");
+
         }
+        LOG.info("src topic matching size: "+matchingTopics.size());
         return matchingTopics;
     }
 
@@ -318,7 +341,8 @@ public class Monitor extends Thread implements Runnable {
         return this.dest_consumer.listTopics();
     }
 
-    // used just to get Topic Partitions metadata
+    // used to get Topic Partitions metadata from source cluster
+    // TODO use kafka admin client
     private static KafkaConsumer<byte[], byte[]> buildSrcConsumerCrawler(MirrorSourceConnectorConfig config) {
         Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.putAll(config.getSrcConsumerConfigs());
@@ -328,7 +352,8 @@ public class Monitor extends Thread implements Runnable {
         return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    // used just to get Topic Partitions metadata
+    // used to get Topic Partitions metadata from dest cluster
+    // TODO use kafka admin client
     private static KafkaConsumer<byte[], byte[]> buildDestConsumerCrawler(MirrorSourceConnectorConfig config) {
         Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.putAll(config.getDestConsumerConfigs());

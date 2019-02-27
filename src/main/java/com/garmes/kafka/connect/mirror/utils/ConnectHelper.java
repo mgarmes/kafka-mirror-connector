@@ -28,7 +28,7 @@
 
 package com.garmes.kafka.connect.mirror.utils;
 
-import kafka.common.Topic;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
