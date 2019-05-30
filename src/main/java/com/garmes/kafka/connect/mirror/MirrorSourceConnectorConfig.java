@@ -28,22 +28,20 @@
 
 package com.garmes.kafka.connect.mirror;
 
-import com.garmes.kafka.connect.mirror.utils.ByteArrayConverter;
-import com.garmes.kafka.connect.mirror.utils.ConnectHelper;
+
 import com.garmes.kafka.connect.mirror.utils.RegexValidator;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricsReporter;
 
-import java.lang.reflect.Field;
 import java.util.*;
 import java.util.regex.Pattern;
 
 public class MirrorSourceConnectorConfig extends AbstractConfig {
 
-
-
     protected MirrorSourceConnectorConfig(ConfigDef subclassConfigDef, Map<String, String> props) {
+
         super(subclassConfigDef, props);
     }
 
@@ -51,60 +49,62 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
         super(CONFIG_DEF, props);
     }
 
-    public static final ConfigDef CONFIG_DEF = baseConfigDef();
+    protected static final ConfigDef CONFIG_DEF = baseConfigDef();
 
-    public static ConfigDef baseConfigDef() {
+    protected static ConfigDef baseConfigDef() {
+
+
         ConfigDef config = new ConfigDef();
         addConnectorOptions(config);
-        defineConsumersConf(SOURCE_PREFIX, SRC_CONSUMER_PREFIX,config);
-        defineConsumersConf(DESTINATION_PREFIX, DEST_CONSUMER_PREFIX,config);
         return config;
     }
 
-    public static final String CONNECTOR_NAME_CONFIG = "name";
-    public static final String CONNECTOR_NAME_DOC = "Unique connector name";
-    public static final String CONNECTOR_NAME_DISPLAY = "connector name";
+    private static final String CONNECTOR_NAME_CONFIG = "name";
+    private static final String CONNECTOR_NAME_DOC = "Unique connector name";
+    private static final String CONNECTOR_NAME_DISPLAY = "connector name";
 
-    public static final String TOPIC_WHITELIST_CONFIG = "topic.whitelist";
-    public static final String TOPIC_WHITELIST_DOC = "Whitelist of topics to be mirrored.";
+    private static final String TOPIC_WHITELIST_CONFIG = "topic.whitelist";
+    private static final String TOPIC_WHITELIST_DOC = "Whitelist of topics to be mirrored.";
     //public static final List TOPIC_WHITELIST_DEFAULT = Collections.emptyList();
-    public static final String TOPIC_WHITELIST_DISPLAY = "topic whitelist";
+    private static final String TOPIC_WHITELIST_DISPLAY = "topic whitelist";
 
-    public static final String TOPIC_BLACKLIST_CONFIG = "topic.blacklist";
-    public static final String TOPIC_BLACKLIST_DOC = "Topics to exclude from mirroring.";
+    private static final String TOPIC_BLACKLIST_CONFIG = "topic.blacklist";
+    private static final String TOPIC_BLACKLIST_DOC = "Topics to exclude from mirroring.";
     //public static final List TOPIC_BLACKLIST_DEFAULT = Collections.emptyList();
-    public static final String TOPIC_BLACKLIST_DISPLAY = "topic blacklist";
+    private static final String TOPIC_BLACKLIST_DISPLAY = "topic blacklist";
 
-    public static final String TOPIC_REGEX_CONFIG = "topic.regex";
-    public static final String TOPIC_REGEX_DOC = "Regex of topics to mirror.";
-    public static final String TOPIC_REGEX_DEFAULT = null;
-    public static final String TOPIC_REGEX_DISPLAY = "topic regex";
+    private static final String TOPIC_REGEX_CONFIG = "topic.regex";
+    private static final String TOPIC_REGEX_DOC = "Regex of topics to mirror.";
+    private static final String TOPIC_REGEX_DEFAULT = null;
+    private static final String TOPIC_REGEX_DISPLAY = "topic regex";
 
-    public static final String TOPIC_POLL_INTERVAL_MS_CONFIG = "topic.poll.interval.ms";
-    public static final String TOPIC_POLL_INTERVAL_MS_DOC = "Frequency in ms to poll for new or removed topics, which may result in updated task "
+    private static final String TOPIC_POLL_INTERVAL_MS_CONFIG = "topic.poll.interval.ms";
+    private static final String TOPIC_POLL_INTERVAL_MS_DOC = "Frequency in ms to poll for new or removed topics, which may result in updated task "
             + "configurations to start polling for data in added topics/partitions or stop polling for data in "
             + "removed topics.";
-    public static final int TOPIC_POLL_INTERVAL_MS_DEFAULT = 180000;
-    public static final String TOPIC_POLL_INTERVAL_MS_DISPLAY = "Topic Config Sync Interval (ms)";
+    private static final int TOPIC_POLL_INTERVAL_MS_DEFAULT = 180000;
+    private static final String TOPIC_POLL_INTERVAL_MS_DISPLAY = "Topic Config Sync Interval (ms)";
 
-    public static final String TOPIC_RENAME_FORMAT_CONFIG = "topic.rename.format";
-    public static final String TOPIC_RENAME_FORMAT_DOC = "A format string to rename the topics in the destination cluster. " +
+    private static final String TOPIC_RENAME_FORMAT_CONFIG = "topic.rename.format";
+    private static final String TOPIC_RENAME_FORMAT_DOC = "A format string to rename the topics in the destination cluster. " +
             "the format string should contain '${topic}' that we bill replaced with the source topic name " +
             "For example, with'${topic}_mirror' format the topic 'test' will be renamed at the destination cluster to 'test_mirror'.";
-    public static final String TOPIC_RENAME_FORMAT_DEFAULT = "${topic}";
-    public static final String TOPIC_RENAME_FORMAT_DISPLAY = "topic regex";
+    private static final String TOPIC_RENAME_FORMAT_DEFAULT = "${topic}";
+    private static final String TOPIC_RENAME_FORMAT_DISPLAY = "topic regex";
 
-    public static final String TOPIC_PRESERVE_PARTITIONS_CONFIG = "topic.preserve.partitions";
-    public static final String TOPIC_PRESERVE_PARTITIONS_DOC = "Ensure that messages mirrored from the source cluster use " +
+    private static final String TOPIC_PRESERVE_PARTITIONS_CONFIG = "topic.preserve.partitions";
+    private static final String TOPIC_PRESERVE_PARTITIONS_DOC = "Ensure that messages mirrored from the source cluster use " +
             "the same partition in the destination cluster. [if source topic have more partitions than destination topic, some partitions will be not mirrored.]";
-    public static final Boolean TOPIC_PRESERVE_PARTITIONS_DEFAULT = true;
-    public static final String TOPIC_PRESERVE_PARTITIONS_DISPLAY = "Preserve Partitions";
+    private static final Boolean TOPIC_PRESERVE_PARTITIONS_DEFAULT = true;
+    private static final String TOPIC_PRESERVE_PARTITIONS_DISPLAY = "Preserve Partitions";
 
 
-    public static final String SRC_CONSUMER_PREFIX = "src.consumer.";
-    public static final String DEST_CONSUMER_PREFIX = "dest.consumer.";
-    public static final String SOURCE_PREFIX = "src.kafka.";
-    public static final String DESTINATION_PREFIX = "dest.kafka.";
+    private static final String SOURCE_PREFIX = "src.kafka.";
+    private static final String TARGET_PREFIX = "dest.kafka.";
+    private static final String SRC_CONSUMER_PREFIX = "src.consumer.";
+    private static final String ADMIN_CLIENT_PREFIX = "admin.";
+    private static final String SOURCE_ADMIN_CLIENT_PREFIX = "source.admin.";
+    private static final String TARGET_ADMIN_CLIENT_PREFIX = "target.admin.";
 
     protected static void addConnectorOptions(ConfigDef configDef) {
 
@@ -226,41 +226,39 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
         return getBoolean(TOPIC_PRESERVE_PARTITIONS_CONFIG);
     }
 
-    // Consumers -----------------------------
-    public Map<String, ?> getSrcConsumerConfigs() {
-        Map<String, Object> configs = originalsWithPrefix(SOURCE_PREFIX);
-        configs.putAll(originalsWithPrefix(SRC_CONSUMER_PREFIX));
-        return configs;
+    // Consumer -----------------------------
+
+    Map<String, Object> sourceConsumerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(SOURCE_PREFIX));
+        props.putAll(originalsWithPrefix(SRC_CONSUMER_PREFIX));
+        props.put("enable.auto.commit", "false");
+        props.put("auto.offset.reset", "earliest");
+        return props;
     }
 
-    public Map<String, ?> getDestConsumerConfigs() {
-        Map<String, Object> configs = originalsWithPrefix(DESTINATION_PREFIX);
-        configs.putAll(originalsWithPrefix(DEST_CONSUMER_PREFIX));
-        return configs;
+    // Admin clients
+    Map<String, Object> targetAdminClientConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_PREFIX));
+        props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(TARGET_ADMIN_CLIENT_PREFIX));
+        return props;
     }
 
-
-    private static void defineConsumersConf(String srcOrDest,String srcOrDestPrefix,ConfigDef configDef) {
-        List<String> remove = new ArrayList<>();
-        remove.add("key.deserializer");
-        remove.add("value.deserializer");
-        remove.add("bootstrap.servers");
-
-        String group = srcOrDest+" Kafka: Consumer";
-        int orderInGroup = 0;
-
-        for (Map.Entry<String, ConfigDef.ConfigKey> keyEntry : ConnectHelper.consumerConfigs().entrySet()) {
-            ConfigDef.ConfigKey value = keyEntry.getValue();
-            if(remove.contains(keyEntry.getKey()))continue;
-            configDef.define(srcOrDestPrefix + value.name,
-                    value.type, value.defaultValue,
-                    value.validator, value.importance,
-                    value.documentation, group, ++orderInGroup,
-                    value.width, value.displayName, value.recommender);
-        }
-
+    Map<String, Object> sourceAdminClientConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(SOURCE_PREFIX));
+        props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(SOURCE_ADMIN_CLIENT_PREFIX));
+        return props;
     }
 
+    List<MetricsReporter> metricsReporters() {
+        List<MetricsReporter> reporters = new ArrayList<>();
+        reporters.add(new JmxReporter("kafka.connect.mirror"));
+        return reporters;
+    }
 
     public static void main(String[] args) {
         System.out.println(CONFIG_DEF.toRst());

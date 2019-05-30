@@ -29,24 +29,35 @@
 package com.garmes.kafka.connect.mirror;
 
 import com.garmes.kafka.connect.mirror.utils.ConnectHelper;
+import com.garmes.kafka.connect.mirror.utils.MirrorMetrics;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class MirrorSourceTaskConfig extends MirrorSourceConnectorConfig {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MirrorSourceTaskConfig.class);
 
     public static final String PARTITION_CONFIG = "task.partitions";
     private static final String PARTITION_DOC = "List of Partition to be mirrored.";
     public static final String ID_CONFIG = "task.id";
     private static final String ID_DOC = "task id (we be used as consumer client.id)";
 
-    private static final ConfigDef config = baseConfigDef().define(PARTITION_CONFIG,
-            ConfigDef.Type.STRING,
-            ConfigDef.Importance.HIGH,
-            PARTITION_DOC).define(ID_CONFIG,
+    private static final ConfigDef config = baseConfigDef()
+            .define(PARTITION_CONFIG,
+                    ConfigDef.Type.LIST,
+                    "",
+                    ConfigDef.Importance.HIGH,
+                    PARTITION_DOC)
+            .define(ID_CONFIG,
             ConfigDef.Type.STRING,
             ConfigDef.Importance.HIGH,
             ID_DOC);
@@ -55,8 +66,19 @@ public class MirrorSourceTaskConfig extends MirrorSourceConnectorConfig {
         super(config, properties);
     }
 
-    public PartitionAssignor.Assignment getPartitions() {
-        return ConnectHelper.decodeTaskPartition(getString(PARTITION_CONFIG));
+    public List<TopicPartition> getPartitions() {
+
+        List<String> fields = getList(PARTITION_CONFIG);
+        if (fields == null || fields.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LOG.info(String.join(",", fields));
+
+        return fields.stream()
+                .map(ConnectHelper::decodeTopicPartition)
+                .collect(Collectors.toList());
+
     }
 
     public String getId() {
@@ -65,11 +87,18 @@ public class MirrorSourceTaskConfig extends MirrorSourceConnectorConfig {
 
 
     public static MirrorSourceTaskConfig create(MirrorSourceConnectorConfig config,
-                                                PartitionAssignor.Assignment assignment, String id) {
+                                                 List<TopicPartition> topicPartitions,
+                                                 String id) {
         Map configCopy = new HashMap(config.originalsStrings());
-        configCopy.put(PARTITION_CONFIG, ConnectHelper.encodeTaskPartitions(assignment));
+        configCopy.put(PARTITION_CONFIG, ConnectHelper.encodeTaskPartitions(topicPartitions));
         configCopy.put(ID_CONFIG, id);
         return new MirrorSourceTaskConfig(configCopy);
+    }
+
+    MirrorMetrics metrics() {
+        MirrorMetrics metrics = new MirrorMetrics(this);
+        metricsReporters().forEach(metrics::addReporter);
+        return metrics;
     }
 
 

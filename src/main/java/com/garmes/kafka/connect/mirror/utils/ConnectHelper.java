@@ -29,20 +29,12 @@
 package com.garmes.kafka.connect.mirror.utils;
 
 import org.apache.kafka.common.internals.Topic;
-import org.apache.commons.codec.binary.Base64;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigDef;
-
-import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class ConnectHelper {
 
@@ -57,7 +49,6 @@ public class ConnectHelper {
         return connectPartition;
     }
 
-
     public static Map<String, Object> toConnectOffset(long offset) {
         return Collections.singletonMap("offset", offset);
     }
@@ -66,50 +57,22 @@ public class ConnectHelper {
         return renameFormat.replace("${topic}", topic);
     }
 
-    /*
-    possible solution so convert the byte array to String
-    1 - "ISO-8859-1"
-    2 - hexadecimal
-    3 - base64
-    Base64 expands the size of data compared to its binary form by one third. So your 40 MB file will be about 53 MB.
-    Hex encoding doubles the size of the data, so your 40 MB file will be 80 MB.
-     */
-    public static PartitionAssignor.Assignment decodeTaskPartition(String encodedAssignment) {
-        return ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Base64.decodeBase64(encodedAssignment)));
+    public static  TopicPartition decodeTopicPartition(String topicPartitionString) {
+        int sep = topicPartitionString.lastIndexOf('-');
+        String topic = topicPartitionString.substring(0, sep);
+        String partitionString = topicPartitionString.substring(sep + 1);
+        int partition = Integer.parseInt(partitionString);
+        return new TopicPartition(topic, partition);
     }
 
-    public static String encodeTaskPartitions(PartitionAssignor.Assignment assignment) {
-        //convert the serialized assignment ByteBuffer to String (task config is a String Object)
-        return Base64.encodeBase64String(ConsumerProtocol.serializeAssignment(assignment).array());
+    public static String encodeTaskPartitions(List<TopicPartition> topicPartitions) {
+        return topicPartitions.stream()
+                .map(TopicPartition::toString)
+                .collect(Collectors.joining(","));
     }
 
     public static boolean isInternalTopic(String topic) {
         return Topic.isInternal(topic);
     }
 
-    public static String topicMetadataToString(Map<String, List<PartitionInfo>> metadata){
-        StringBuilder stringBuilder = new StringBuilder();
-
-        for(Map.Entry<String, List<PartitionInfo>> entry: metadata.entrySet()){
-            stringBuilder.append(entry.getKey());
-            stringBuilder.append(":[");
-            for (PartitionInfo partitionInfo:entry.getValue()){
-                stringBuilder.append(partitionInfo.partition()+",");
-            }
-            stringBuilder.append("],");
-        }
-        return stringBuilder.toString();
-    }
-
-    public static Map<String, ConfigDef.ConfigKey> consumerConfigs() {
-        // Access to private field https://stackoverflow.com/questions/1196192/how-to-read-the-value-of-a-private-field-from-a-different-class-in-java
-        try {
-            Field field = ConsumerConfig.class.getDeclaredField("CONFIG");
-            field.setAccessible(true);
-            ConfigDef configDef = (ConfigDef) field.get(ConsumerConfig.class);
-            return configDef.configKeys();
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
-    }
 }
