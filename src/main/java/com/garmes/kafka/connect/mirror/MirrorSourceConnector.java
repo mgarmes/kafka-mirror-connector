@@ -29,7 +29,7 @@
 package com.garmes.kafka.connect.mirror;
 
 import com.garmes.kafka.connect.mirror.utils.Version;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.Task;
@@ -38,14 +38,11 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class MirrorSourceConnector extends SourceConnector {
     private static final Logger LOG = LoggerFactory.getLogger(MirrorSourceConnector.class);
-    private Monitor monitor;
+    private MonitorAdmin monitor;
     private MirrorSourceConnectorConfig config;
 
     @Override
@@ -64,7 +61,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
         LOG.info("Starting mirror connector");
 
-        this.monitor = new Monitor(this.context, this.config);
+        this.monitor = new MonitorAdmin(this.context, this.config);
         this.monitor.start();
     }
 
@@ -76,16 +73,21 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
 
-        List<Map<String, String>> taskConfigs = new ArrayList();
-        Map<String, PartitionAssignor.Assignment> tasksPartitions = this.monitor.getTasksPartitions(maxTasks);
-        for (Map.Entry<String, PartitionAssignor.Assignment> task : tasksPartitions.entrySet()) {
+        List<Map<String, String>> taskConfigs = new ArrayList<Map<String, String>>();
 
-            MirrorSourceTaskConfig taskConfig = MirrorSourceTaskConfig.create(this.config,
-                    task.getValue(),
-                    String.format("%s-%s",this.config.getConnectorName(), task.getKey()));
-
-            taskConfigs.add(taskConfig.originalsStrings());
+        List<List<TopicPartition>> tasksPartitions = this.monitor.getTasksPartitions(maxTasks);
+        if (tasksPartitions.isEmpty()) {
+            return Collections.emptyList();
         }
+
+        for(int i=0; i<tasksPartitions.size();i++){
+            taskConfigs.add(MirrorSourceTaskConfig.create(
+                    this.config,
+                    tasksPartitions.get(i),
+                    Integer.toString(i)).originalsStrings()
+            );
+        }
+
         return taskConfigs;
     }
 

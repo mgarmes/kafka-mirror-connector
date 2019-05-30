@@ -30,9 +30,11 @@ package com.garmes.kafka.connect.mirror;
 
 import com.garmes.kafka.connect.mirror.utils.ByteArrayConverter;
 import com.garmes.kafka.connect.mirror.utils.ConnectHelper;
+import com.garmes.kafka.connect.mirror.utils.MirrorMetrics;
 import com.garmes.kafka.connect.mirror.utils.Version;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.CorruptRecordException;
@@ -46,6 +48,7 @@ import org.apache.kafka.connect.storage.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -53,6 +56,7 @@ public class MirrorSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
     private MirrorSourceTaskConfig config;
+    private MirrorMetrics metrics;
     private Converter sourceKeyConverter;
     private Converter sourceValueConverter;
     private volatile Consumer<byte[], byte[]> consumer;
@@ -73,11 +77,13 @@ public class MirrorSourceTask extends SourceTask {
             throw new ConnectException("Failed to start Kafka mirror task due to configuration error", e);
         }
 
+        this.metrics = config.metrics();
+
         this.sourceKeyConverter = new ByteArrayConverter();
         this.sourceValueConverter = new ByteArrayConverter();
         this.consumer = buildConsumer(this.config);
 
-        Collection<TopicPartition> partitions = this.config.getPartitions().partitions();
+        Collection<TopicPartition> partitions = this.config.getPartitions();
         initConsumer(partitions);
         log.info("Started kafka mirror task, mirroring partitions {}", partitions);
     }
@@ -86,7 +92,7 @@ public class MirrorSourceTask extends SourceTask {
     public List<SourceRecord> poll() throws InterruptedException {
         try {
 
-            ConsumerRecords<byte[], byte[]> records = this.consumer.poll(100);
+            ConsumerRecords<byte[], byte[]> records = this.consumer.poll(Duration.ofMillis(200));
             if (records.isEmpty()) {
                 return Collections.emptyList();
             }
@@ -125,6 +131,10 @@ public class MirrorSourceTask extends SourceTask {
                                     value.schema(),
                                     value.value(),
                                     timestamp));
+
+                    TopicPartition destTP = new TopicPartition(destTopic, destPartition);
+                    this.metrics.recordAge(destTP, System.currentTimeMillis() - record.timestamp());
+                    this.metrics.recordBytes(destTP, record.value().length);
                 }
             }
 
@@ -177,18 +187,7 @@ public class MirrorSourceTask extends SourceTask {
             return this.consumer;
         }
         Map<String, Object> consumerConfig = new HashMap();
-        consumerConfig.putAll(config.getSrcConsumerConfigs());
-
-        /*
-        we can not run meany consumer in the same JVM with the same client.id  {bean conflict}
-        javax.management.InstanceAlreadyExistsException: kafka.consumer:type=app-info,id=kafka-mirror-client
-         if (!consumerConfig.containsKey("client.id")) {
-            consumerConfig.put("client.id", "kafka-mirror-client");
-        }
-
-        Random randomGenerator = new Random();
-        consumerConfig.put("client.id", "kafka-mirror-client"+randomGenerator.nextInt(1000));
-         */
+        consumerConfig.putAll(config.sourceConsumerConfig());
 
         consumerConfig.put("client.id", this.config.getId());
         consumerConfig.put("enable.auto.commit", false);
@@ -196,6 +195,13 @@ public class MirrorSourceTask extends SourceTask {
         return new KafkaConsumer(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
+    @Override
+    public void commitRecord(SourceRecord record) throws InterruptedException {
+        TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
+        long latency = System.currentTimeMillis() - record.timestamp();
+        this.metrics.countRecord(topicPartition);
+        this.metrics.replicationLatency(topicPartition, latency);
+    }
 
     // Helpers -------------------
     private String toDestTopic(String sourceTopic) {
