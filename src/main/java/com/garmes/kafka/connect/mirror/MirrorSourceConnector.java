@@ -73,7 +73,7 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
 
-        List<Map<String, String>> taskConfigs = new ArrayList<Map<String, String>>();
+        List<Map<String, String>> taskConfigs = new ArrayList<>();
 
         List<List<TopicPartition>> tasksPartitions = this.monitor.getTasksPartitions(maxTasks);
         if (tasksPartitions.isEmpty()) {

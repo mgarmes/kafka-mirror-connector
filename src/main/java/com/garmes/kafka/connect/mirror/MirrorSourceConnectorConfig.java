@@ -40,18 +40,18 @@ import java.util.regex.Pattern;
 
 public class MirrorSourceConnectorConfig extends AbstractConfig {
 
-    protected MirrorSourceConnectorConfig(ConfigDef subclassConfigDef, Map<String, String> props) {
+    MirrorSourceConnectorConfig(ConfigDef subclassConfigDef, Map<String, String> props) {
 
         super(subclassConfigDef, props);
     }
 
-    public MirrorSourceConnectorConfig(Map<String, String> props) {
+    MirrorSourceConnectorConfig(Map<String, String> props) {
         super(CONFIG_DEF, props);
     }
 
-    protected static final ConfigDef CONFIG_DEF = baseConfigDef();
+    static final ConfigDef CONFIG_DEF = baseConfigDef();
 
-    protected static ConfigDef baseConfigDef() {
+    static ConfigDef baseConfigDef() {
 
 
         ConfigDef config = new ConfigDef();
@@ -95,7 +95,7 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
     private static final String TOPIC_PRESERVE_PARTITIONS_CONFIG = "topic.preserve.partitions";
     private static final String TOPIC_PRESERVE_PARTITIONS_DOC = "Ensure that messages mirrored from the source cluster use " +
             "the same partition in the destination cluster. [if source topic have more partitions than destination topic, some partitions will be not mirrored.]";
-    private static final Boolean TOPIC_PRESERVE_PARTITIONS_DEFAULT = true;
+    //private static final Boolean TOPIC_PRESERVE_PARTITIONS_DEFAULT = true;
     private static final String TOPIC_PRESERVE_PARTITIONS_DISPLAY = "Preserve Partitions";
 
 
@@ -106,7 +106,7 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
     private static final String SOURCE_ADMIN_CLIENT_PREFIX = "source.admin.";
     private static final String TARGET_ADMIN_CLIENT_PREFIX = "target.admin.";
 
-    protected static void addConnectorOptions(ConfigDef configDef) {
+    private static void addConnectorOptions(ConfigDef configDef) {
 
         int orderInGroup = 0;
         String group;
@@ -199,30 +199,32 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
 
     // Getters
 
-    public String getConnectorName(){ return  getString(CONNECTOR_NAME_CONFIG); }
+    String getConnectorName(){ return  getString(CONNECTOR_NAME_CONFIG); }
 
-    public Pattern getTopicPattern() {
+    Pattern getTopicPattern() {
         String regex = getString(TOPIC_REGEX_CONFIG);
         return regex == null ? null : Pattern.compile(regex);
     }
 
-    public Set<String> getWhiteListTopics() {
-        return new HashSet(getList(TOPIC_WHITELIST_CONFIG));
+    Set<String> getWhiteListTopics() {
+        return new HashSet<>(getList(TOPIC_WHITELIST_CONFIG));
+
     }
 
-    public Set<String> getBlackListTopics() {
-        return new HashSet(getList(TOPIC_BLACKLIST_CONFIG));
+    Set<String> getBlackListTopics() {
+        return new HashSet<>(getList(TOPIC_BLACKLIST_CONFIG));
     }
+
 
     public String getTopicRenameFormat() {
         return getString(TOPIC_RENAME_FORMAT_CONFIG);
     }
 
-    public int getTopicPollIntervalMs() {
+    int getTopicPollIntervalMs() {
         return getInt(TOPIC_POLL_INTERVAL_MS_CONFIG);
     }
 
-    public boolean getTopicPreservePartitions() {
+    boolean getTopicPreservePartitions() {
         return getBoolean(TOPIC_PRESERVE_PARTITIONS_CONFIG);
     }
 

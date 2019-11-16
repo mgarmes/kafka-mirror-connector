@@ -31,15 +31,9 @@ package com.garmes.kafka.connect.mirror;
 import com.garmes.kafka.connect.mirror.utils.ConnectHelper;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.ConnectorUtils;
@@ -264,71 +258,6 @@ public class MonitorAdmin extends Thread implements Runnable {
         }
 
     }
-
-
-    private Boolean partitionExists(int partition, List<PartitionInfo> topicPartitionsInfo) {
-        for (PartitionInfo topicPartitionInfo : topicPartitionsInfo) {
-            if (topicPartitionInfo.partition() == partition) return true;
-        }
-        return false;
-    }
-
-    private void removeNonExistingPartitions(Map<String, List<PartitionInfo>> src_topicPartitions,
-                                             Map<String, List<PartitionInfo>> dest_topicPartitions) {
-
-        String[] src_topics = new String[src_topicPartitions.size()];
-        src_topicPartitions.keySet().toArray(src_topics);
-
-        for (Map.Entry<String, List<PartitionInfo>> entry : src_topicPartitions.entrySet()) {
-            String src_topic = entry.getKey();
-            String dest_topic = ConnectHelper.renameTopic(TOPIC_RENAME_FORMAT_CONFIG, src_topic);
-            List<PartitionInfo> src_topic_partitions = entry.getValue();
-            List<PartitionInfo> dest_topic_partitions = dest_topicPartitions.getOrDefault(dest_topic, Collections.emptyList());
-            if (dest_topic_partitions.size() == 0) {
-                LOG.warn("Destination topic don't exists {}, source topic {} will not be mirrored", dest_topic, src_topic);
-                src_topicPartitions.remove(src_topic);
-                continue;
-            }
-            if (!preservePartition) {
-                return;
-            }
-            if (src_topic_partitions.size() < dest_topic_partitions.size()) {
-                LOG.warn("Destination topic '{}' have more partitions than source topic '{}' .", dest_topic, src_topic);
-            } else if (src_topic_partitions.size() > dest_topic_partitions.size()) {
-
-                LOG.warn("Source topic '{}' have more partitions than destination topic '{}', some partition will be not mirrored .", src_topic, dest_topic);
-
-                List<PartitionInfo> to = new ArrayList<>();
-                for (Iterator<PartitionInfo> i = src_topic_partitions.iterator(); i.hasNext(); ) {
-                    PartitionInfo element = i.next();
-                    if (partitionExists(element.partition(), dest_topic_partitions)) {
-
-                        to.add(element);
-                    } else {
-                        LOG.warn("Partition Will be not mirrored {} {}.", element.topic(), element.partition());
-                    }
-                }
-                entry.setValue(to);
-            }
-        }
-    }
-
-
-    // cluster metadata will be used only with the assignor
-    private Cluster clusterMetadata(Map<String, List<PartitionInfo>> srcTopics) {
-        Set<Node> nodes = new HashSet<>();
-        List<PartitionInfo> partitionInfos = new ArrayList<>();
-        for (Map.Entry<String, List<PartitionInfo>> topicEntry : srcTopics.entrySet()) {
-            partitionInfos.addAll(topicEntry.getValue());
-            for (PartitionInfo partitionInfo : topicEntry.getValue()) {
-                Collections.addAll(nodes, partitionInfo.replicas());
-            }
-        }
-        return new Cluster(null, nodes, partitionInfos,
-                Collections.emptySet(),
-                Collections.emptySet());
-    }
-
 
     // ----------------------
     private boolean matchesTopicPattern(String topic) {
