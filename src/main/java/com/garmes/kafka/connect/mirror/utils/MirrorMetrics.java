@@ -102,7 +102,7 @@ public class MirrorMetrics {
 
         partitionMetrics =  taskConfig.getPartitions().stream()
                 .map(x -> new TopicPartition(ConnectHelper.renameTopic(format,x.topic()), x.partition()))
-                .collect(Collectors.toMap(x -> x, x -> new PartitionMetrics(x)));
+                .collect(Collectors.toMap(x -> x, PartitionMetrics::new));
 
     }
 

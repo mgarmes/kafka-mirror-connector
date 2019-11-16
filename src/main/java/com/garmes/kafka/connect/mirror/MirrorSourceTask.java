@@ -34,7 +34,6 @@ import com.garmes.kafka.connect.mirror.utils.MirrorMetrics;
 import com.garmes.kafka.connect.mirror.utils.Version;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.consumer.*;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.CorruptRecordException;
@@ -98,10 +97,10 @@ public class MirrorSourceTask extends SourceTask {
             }
             boolean preservePartitions = this.config.getTopicPreservePartitions();
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
-            for (Iterator i$ = records.partitions().iterator(); i$.hasNext(); ) {
-                TopicPartition topicPartition = (TopicPartition) i$.next();
+
+            records.partitions().forEach((TopicPartition topicPartition) -> {
                 String sourceTopic = topicPartition.topic();
-                String destTopic = toDestTopic(sourceTopic);
+                String targetTopic = toTargetTopic(sourceTopic);
 
                 int partition = topicPartition.partition();
                 Map<String, ?> connectSourcePartition = ConnectHelper.toConnectPartition(sourceTopic, partition);
@@ -116,33 +115,27 @@ public class MirrorSourceTask extends SourceTask {
                         if (record.timestamp() == -1L) {
                             timestamp = null;
                         } else {
-                            throw new CorruptRecordException(String.format("Invalid Record timestamp: %d", record.timestamp()));
+                            throw new CorruptRecordException(String.format("Invalid Record timestamp: %d",
+                                    record.timestamp()));
                         }
                     }
 
-                    Integer destPartition = preservePartitions ? partition : null;
+                    Integer targetPartitions = preservePartitions ? partition : null;
+                    sourceRecords.add(new SourceRecord(
+                            connectSourcePartition, connectOffset, targetTopic, targetPartitions,
+                            key.schema(), key.value(), value.schema(), value.value(), timestamp));
 
-                    sourceRecords.add(new SourceRecord(connectSourcePartition,
-                                    connectOffset,
-                                    destTopic,
-                                    destPartition,
-                                    key.schema(),
-                                    key.value(),
-                                    value.schema(),
-                                    value.value(),
-                                    timestamp));
-
-                    TopicPartition destTP = new TopicPartition(destTopic, destPartition);
+                    TopicPartition destTP = new TopicPartition(targetTopic, partition);
                     this.metrics.recordAge(destTP, System.currentTimeMillis() - record.timestamp());
                     this.metrics.recordBytes(destTP, record.value().length);
                 }
-            }
+
+            });
 
             return sourceRecords;
         } catch (OffsetOutOfRangeException e) {
             Map<TopicPartition, Long> outOfRangePartitions = e.offsetOutOfRangePartitions();
             log.warn("Consumer from source cluster detected out of range partitions: {}", outOfRangePartitions);
-
             this.consumer.seekToBeginning(outOfRangePartitions.keySet());
             return Collections.emptyList();
         } catch (WakeupException e) {
@@ -157,13 +150,13 @@ public class MirrorSourceTask extends SourceTask {
         if (this.consumer != null) {
             this.consumer.wakeup();
             synchronized (this) {
-                ClientUtils.closeQuietly(this.consumer, "consumer", new AtomicReference());
+                ClientUtils.closeQuietly(this.consumer, "consumer", new AtomicReference<>());
             }
         }
     }
 
 
-    synchronized void initConsumer(Collection<TopicPartition> partitions) {
+    private synchronized void initConsumer(Collection<TopicPartition> partitions) {
 
         this.consumer.assign(partitions);
 
@@ -186,13 +179,12 @@ public class MirrorSourceTask extends SourceTask {
         if (this.consumer != null) {
             return this.consumer;
         }
-        Map<String, Object> consumerConfig = new HashMap();
+        Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.putAll(config.sourceConsumerConfig());
-
         consumerConfig.put("client.id", this.config.getId());
         consumerConfig.put("enable.auto.commit", false);
         consumerConfig.put("auto.offset.reset", "none");
-        return new KafkaConsumer(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     @Override
@@ -204,7 +196,7 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     // Helpers -------------------
-    private String toDestTopic(String sourceTopic) {
+    private String toTargetTopic(String sourceTopic) {
         return ConnectHelper.renameTopic(this.config.getTopicRenameFormat(), sourceTopic);
     }
 
