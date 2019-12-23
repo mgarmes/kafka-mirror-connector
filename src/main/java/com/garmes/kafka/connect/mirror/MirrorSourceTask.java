@@ -88,7 +88,7 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     @Override
-    public List<SourceRecord> poll() throws InterruptedException {
+    public List<SourceRecord> poll() {
         try {
 
             ConsumerRecords<byte[], byte[]> records = this.consumer.poll(Duration.ofMillis(200));
@@ -181,14 +181,14 @@ public class MirrorSourceTask extends SourceTask {
         }
         Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.putAll(config.sourceConsumerConfig());
-        consumerConfig.put("client.id", this.config.getId());
+        consumerConfig.put("client.id", "mirror-client");
         consumerConfig.put("enable.auto.commit", false);
         consumerConfig.put("auto.offset.reset", "none");
         return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     @Override
-    public void commitRecord(SourceRecord record) throws InterruptedException {
+    public void commitRecord(SourceRecord record) {
         TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
         long latency = System.currentTimeMillis() - record.timestamp();
         this.metrics.countRecord(topicPartition);
