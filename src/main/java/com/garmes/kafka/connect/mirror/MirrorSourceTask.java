@@ -92,6 +92,7 @@ public class MirrorSourceTask extends SourceTask {
         try {
 
             ConsumerRecords<byte[], byte[]> records = this.consumer.poll(Duration.ofMillis(200));
+            metrics.updateConsumerPoll(System.currentTimeMillis());
             if (records.isEmpty()) {
                 return Collections.emptyList();
             }

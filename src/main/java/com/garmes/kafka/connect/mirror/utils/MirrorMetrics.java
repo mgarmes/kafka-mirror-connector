@@ -30,9 +30,7 @@ package com.garmes.kafka.connect.mirror.utils;
 import com.garmes.kafka.connect.mirror.MirrorSourceConnector;
 import com.garmes.kafka.connect.mirror.MirrorSourceTaskConfig;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.*;
 import org.apache.kafka.common.metrics.stats.*;
 import org.apache.kafka.common.TopicPartition;
 
@@ -41,6 +39,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 
@@ -99,14 +98,18 @@ public class MirrorMetrics {
     private final Metrics metrics;
     private final Map<TopicPartition, PartitionMetrics> partitionMetrics;
 
+    private volatile long lastConsumerPoll; // volatile since it is read by metrics
+
+    public void updateConsumerPoll(long now) {
+        this.lastConsumerPoll = now;
+    }
+    public long lastConsumerPoll() {
+        return this.lastConsumerPoll;
+    }
+
 
     public MirrorMetrics(MirrorSourceTaskConfig taskConfig) {
         this.metrics = new Metrics();
-
-        metrics.sensor("record-count");
-        metrics.sensor("byte-rate");
-        metrics.sensor("record-age");
-        metrics.sensor("replication-latency");
 
         String format = taskConfig.getTopicRenameFormat();
 
@@ -114,6 +117,7 @@ public class MirrorMetrics {
                 .map(x -> new TopicPartition(ConnectHelper.renameTopic(format,x.topic()), x.partition()))
                 .collect(Collectors.toMap(x -> x, PartitionMetrics::new));
 
+        new TaskMetrics();
     }
 
     public void countRecord(TopicPartition topicPartition) {
@@ -136,6 +140,21 @@ public class MirrorMetrics {
         metrics.addReporter(reporter);
     }
 
+    private class TaskMetrics {
+
+        TaskMetrics(){
+            Measurable lastPoll = new Measurable() {
+                public double measure(MetricConfig config, long now) {
+                    return TimeUnit.SECONDS.convert(now - lastConsumerPoll(), TimeUnit.MILLISECONDS);
+                }
+            };
+            metrics.addMetric(metrics.metricName("last-poll-seconds-ago",
+                    SOURCE_CONNECTOR_GROUP,
+                    "The number of seconds since the last consumer poll"),
+                    lastPoll);
+        }
+
+    }
     private class PartitionMetrics {
         private final Sensor recordSensor;
         private final Sensor byteSensor;
@@ -146,14 +165,6 @@ public class MirrorMetrics {
             Map<String, String> tags = new LinkedHashMap<>();
             tags.put("topic", topicPartition.topic());
             tags.put("partition", Integer.toString(topicPartition.partition()));
-
-            /*
-            recordSensor = metrics.sensor("record-count");
-            recordSensor.add(metrics.metricInstance(RECORD_COUNT, tags), new Count());
-
-            byteSensor = metrics.sensor("byte-rate");
-            byteSensor.add(metrics.metricInstance(BYTE_RATE, tags), new Rate());
-            */
 
             String prefix = topicPartition.topic() + "-" + topicPartition.partition() + "-";
 
