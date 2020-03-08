@@ -34,6 +34,7 @@ import com.garmes.kafka.connect.mirror.utils.MirrorMetrics;
 import com.garmes.kafka.connect.mirror.utils.Version;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.CorruptRecordException;
@@ -59,6 +60,7 @@ public class MirrorSourceTask extends SourceTask {
     private Converter sourceKeyConverter;
     private Converter sourceValueConverter;
     private volatile Consumer<byte[], byte[]> consumer;
+    private boolean stopping = false;
 
     public MirrorSourceTask() {
     }
@@ -89,12 +91,16 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() {
+        if (stopping) {
+            return null;
+        }
         try {
-
             ConsumerRecords<byte[], byte[]> records = this.consumer.poll(Duration.ofMillis(200));
             metrics.updateConsumerPoll(System.currentTimeMillis());
             if (records.isEmpty()) {
                 return Collections.emptyList();
+            }else {
+                log.trace("Polled {} records from {}.", records.count(), records.partitions());
             }
             boolean preservePartitions = this.config.getTopicPreservePartitions();
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
@@ -130,7 +136,6 @@ public class MirrorSourceTask extends SourceTask {
                     this.metrics.recordAge(destTP, System.currentTimeMillis() - record.timestamp());
                     this.metrics.recordBytes(destTP, record.value().length);
                 }
-
             });
 
             return sourceRecords;
@@ -138,16 +143,24 @@ public class MirrorSourceTask extends SourceTask {
             Map<TopicPartition, Long> outOfRangePartitions = e.offsetOutOfRangePartitions();
             log.warn("Consumer from source cluster detected out of range partitions: {}", outOfRangePartitions);
             this.consumer.seekToBeginning(outOfRangePartitions.keySet());
-            return Collections.emptyList();
+            return null;
         } catch (WakeupException e) {
             log.debug("Kafka mirror task woken up");
+        } catch (KafkaException e) {
+            log.warn("Failure during poll.", e);
+            return null;
+        } catch (Throwable e)  {
+            log.error("Failure during poll.", e);
+            // allow Connect to deal with the exception
+            throw e;
         }
-        return Collections.emptyList();
+        return null;
     }
 
     @Override
     public void stop() {
         log.info("Closing kafka mirror task");
+        stopping = true;
         if (this.consumer != null) {
             this.consumer.wakeup();
             synchronized (this) {
@@ -160,7 +173,6 @@ public class MirrorSourceTask extends SourceTask {
     private synchronized void initConsumer(Collection<TopicPartition> partitions) {
 
         this.consumer.assign(partitions);
-
         for (TopicPartition partition : partitions) {
             Map<String, ?> connectSourcePartition = ConnectHelper.toConnectPartition(partition);
             // Get the latest committed offset
