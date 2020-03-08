@@ -136,9 +136,22 @@ public class MonitorAdmin extends Thread implements Runnable {
         }
 
         int numTasks = Math.min(this.currentTopicPartitions.size(), maxTasks);
-       return ConnectorUtils.groupPartitions(this.currentTopicPartitions, numTasks);
+       return groupPartitions(this.currentTopicPartitions, numTasks);
     }
 
+    private List<List<TopicPartition>> groupPartitions(List<TopicPartition> topicPartition, int numTasks){
+        List<List<TopicPartition>> roundRobinByTask = new ArrayList<>(numTasks);
+        for (int i = 0; i < numTasks; i++) {
+            roundRobinByTask.add(new ArrayList<>());
+        }
+        int count = 0;
+        for (TopicPartition partition : topicPartition) {
+            int index = count % numTasks;
+            roundRobinByTask.get(index).add(partition);
+            count++;
+        }
+        return roundRobinByTask;
+    }
     public void start() {
         super.setDaemon(true);
         super.start();

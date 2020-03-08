@@ -49,7 +49,7 @@ public class MirrorSourceTaskConfig extends MirrorSourceConnectorConfig {
     public static final String PARTITION_CONFIG = "task.partitions";
     private static final String PARTITION_DOC = "List of Partition to be mirrored.";
     public static final String ID_CONFIG = "task.id";
-    private static final String ID_DOC = "task id (we be used as consumer client.id)";
+    private static final String ID_DOC = "task id";
 
     private static final ConfigDef config = baseConfigDef()
             .define(PARTITION_CONFIG,
@@ -58,9 +58,9 @@ public class MirrorSourceTaskConfig extends MirrorSourceConnectorConfig {
                     ConfigDef.Importance.HIGH,
                     PARTITION_DOC)
             .define(ID_CONFIG,
-            ConfigDef.Type.STRING,
-            ConfigDef.Importance.HIGH,
-            ID_DOC);
+                    ConfigDef.Type.STRING,
+                    ConfigDef.Importance.HIGH,
+                    ID_DOC);
 
     public MirrorSourceTaskConfig(Map<String, String> properties) {
         super(config, properties);

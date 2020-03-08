@@ -30,15 +30,8 @@ package com.garmes.kafka.connect.mirror.utils;
 import com.garmes.kafka.connect.mirror.MirrorSourceConnector;
 import com.garmes.kafka.connect.mirror.MirrorSourceTaskConfig;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Value;
-import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Min;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.*;
+import org.apache.kafka.common.metrics.stats.*;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Arrays;
@@ -46,6 +39,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 
@@ -54,9 +48,25 @@ public class MirrorMetrics {
     private static final String SOURCE_CONNECTOR_GROUP = MirrorSourceConnector.class.getSimpleName();
     private static final Set<String> PARTITION_TAGS = new HashSet<>(Arrays.asList("topic", "partition"));
 
+    /* Record */
     private static final MetricNameTemplate RECORD_COUNT = new MetricNameTemplate(
             "record-count", SOURCE_CONNECTOR_GROUP,
             "Number of source records replicated to the target cluster.", PARTITION_TAGS);
+
+    private static final MetricNameTemplate RECORD_RATE = new MetricNameTemplate(
+            "record-rate", SOURCE_CONNECTOR_GROUP,
+            "Average number of source records replicated to the target cluster per second.", PARTITION_TAGS);
+
+    /* Byte */
+    private static final MetricNameTemplate BYTE_COUNT = new MetricNameTemplate(
+            "byte-count", SOURCE_CONNECTOR_GROUP,
+            "Number of bytes replicated to the target cluster.", PARTITION_TAGS);
+
+    private static final MetricNameTemplate BYTE_RATE = new MetricNameTemplate(
+            "byte-rate", SOURCE_CONNECTOR_GROUP,
+            "Average number of bytes replicated per second.", PARTITION_TAGS);
+
+    /* AGE*/
     private static final MetricNameTemplate RECORD_AGE = new MetricNameTemplate(
             "record-age-ms", SOURCE_CONNECTOR_GROUP,
             "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
@@ -69,9 +79,8 @@ public class MirrorMetrics {
     private static final MetricNameTemplate RECORD_AGE_AVG = new MetricNameTemplate(
             "record-age-ms-avg", SOURCE_CONNECTOR_GROUP,
             "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
-    private static final MetricNameTemplate BYTE_RATE = new MetricNameTemplate(
-            "byte-rate", SOURCE_CONNECTOR_GROUP,
-            "Average number of bytes replicated per second.", PARTITION_TAGS);
+
+    /* LATENCY */
     private static final MetricNameTemplate REPLICATION_LATENCY = new MetricNameTemplate(
             "replication-latency-ms", SOURCE_CONNECTOR_GROUP,
             "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
@@ -89,14 +98,18 @@ public class MirrorMetrics {
     private final Metrics metrics;
     private final Map<TopicPartition, PartitionMetrics> partitionMetrics;
 
+    private volatile long lastConsumerPoll; // volatile since it is read by metrics
+
+    public void updateConsumerPoll(long now) {
+        this.lastConsumerPoll = now;
+    }
+    public long lastConsumerPoll() {
+        return this.lastConsumerPoll;
+    }
+
 
     public MirrorMetrics(MirrorSourceTaskConfig taskConfig) {
         this.metrics = new Metrics();
-
-        metrics.sensor("record-count");
-        metrics.sensor("byte-rate");
-        metrics.sensor("record-age");
-        metrics.sensor("replication-latency");
 
         String format = taskConfig.getTopicRenameFormat();
 
@@ -104,6 +117,7 @@ public class MirrorMetrics {
                 .map(x -> new TopicPartition(ConnectHelper.renameTopic(format,x.topic()), x.partition()))
                 .collect(Collectors.toMap(x -> x, PartitionMetrics::new));
 
+        new TaskMetrics();
     }
 
     public void countRecord(TopicPartition topicPartition) {
@@ -119,16 +133,31 @@ public class MirrorMetrics {
     }
 
     public void recordBytes(TopicPartition topicPartition, long bytes) {
-        partitionMetrics.get(topicPartition).byteRateSensor.record((double) bytes);
+        partitionMetrics.get(topicPartition).byteSensor.record((double) bytes);
     }
 
     public void addReporter(MetricsReporter reporter) {
         metrics.addReporter(reporter);
     }
 
+    private class TaskMetrics {
+
+        TaskMetrics(){
+            Measurable lastPoll = new Measurable() {
+                public double measure(MetricConfig config, long now) {
+                    return TimeUnit.SECONDS.convert(now - lastConsumerPoll(), TimeUnit.MILLISECONDS);
+                }
+            };
+            metrics.addMetric(metrics.metricName("last-poll-seconds-ago",
+                    SOURCE_CONNECTOR_GROUP,
+                    "The number of seconds since the last consumer poll"),
+                    lastPoll);
+        }
+
+    }
     private class PartitionMetrics {
         private final Sensor recordSensor;
-        private final Sensor byteRateSensor;
+        private final Sensor byteSensor;
         private final Sensor recordAgeSensor;
         private final Sensor replicationLatencySensor;
 
@@ -137,19 +166,22 @@ public class MirrorMetrics {
             tags.put("topic", topicPartition.topic());
             tags.put("partition", Integer.toString(topicPartition.partition()));
 
-            recordSensor = metrics.sensor("record-count");
-            recordSensor.add(metrics.metricInstance(RECORD_COUNT, tags), new Count());
+            String prefix = topicPartition.topic() + "-" + topicPartition.partition() + "-";
 
-            byteRateSensor = metrics.sensor("byte-rate");
-            byteRateSensor.add(metrics.metricInstance(BYTE_RATE, tags), new Rate());
+            recordSensor = metrics.sensor(prefix + "records-sent");
+            recordSensor.add(new Meter(metrics.metricInstance(RECORD_RATE, tags), metrics.metricInstance(RECORD_COUNT, tags)));
 
-            recordAgeSensor = metrics.sensor("record-age");
+            byteSensor = metrics.sensor(prefix + "bytes-sent");
+            byteSensor.add(new Meter(metrics.metricInstance(BYTE_RATE, tags), metrics.metricInstance(BYTE_COUNT, tags)));
+
+
+            recordAgeSensor = metrics.sensor(prefix + "record-age");
             recordAgeSensor.add(metrics.metricInstance(RECORD_AGE, tags), new Value());
             recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_MAX, tags), new Max());
             recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_MIN, tags), new Min());
             recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_AVG, tags), new Avg());
 
-            replicationLatencySensor = metrics.sensor("replication-latency");
+            replicationLatencySensor = metrics.sensor(prefix + "replication-latency");
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY, tags), new Value());
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MAX, tags), new Max());
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MIN, tags), new Min());
