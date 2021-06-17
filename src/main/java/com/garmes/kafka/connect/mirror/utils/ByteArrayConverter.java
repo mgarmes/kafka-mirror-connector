@@ -35,6 +35,7 @@ import org.apache.kafka.connect.storage.Converter;
 
 import java.util.Map;
 
+@Deprecated
 public class ByteArrayConverter implements Converter {
 
     public void configure(Map<String, ?> map, boolean b) {

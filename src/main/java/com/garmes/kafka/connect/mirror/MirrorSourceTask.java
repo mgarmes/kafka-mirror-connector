@@ -28,12 +28,18 @@
 
 package com.garmes.kafka.connect.mirror;
 
-import com.garmes.kafka.connect.mirror.utils.ByteArrayConverter;
+
 import com.garmes.kafka.connect.mirror.utils.ConnectHelper;
 import com.garmes.kafka.connect.mirror.utils.MirrorMetrics;
 import com.garmes.kafka.connect.mirror.utils.Version;
-import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.clients.consumer.*;
+
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
@@ -45,11 +51,17 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class MirrorSourceTask extends SourceTask {
@@ -164,7 +176,7 @@ public class MirrorSourceTask extends SourceTask {
         if (this.consumer != null) {
             this.consumer.wakeup();
             synchronized (this) {
-                ClientUtils.closeQuietly(this.consumer, "consumer", new AtomicReference<>());
+                Utils.closeQuietly(this.consumer, "consumer", new AtomicReference<>());
             }
         }
     }
@@ -201,7 +213,7 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     @Override
-    public void commitRecord(SourceRecord record) {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
         long latency = System.currentTimeMillis() - record.timestamp();
         this.metrics.countRecord(topicPartition);

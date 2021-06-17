@@ -99,12 +99,12 @@ public class MirrorSourceConnectorConfig extends AbstractConfig {
     private static final String TOPIC_PRESERVE_PARTITIONS_DISPLAY = "Preserve Partitions";
 
 
-    private static final String SOURCE_PREFIX = "src.kafka.";
-    private static final String TARGET_PREFIX = "dest.kafka.";
-    private static final String SRC_CONSUMER_PREFIX = "src.consumer.";
-    private static final String ADMIN_CLIENT_PREFIX = "admin.";
-    private static final String SOURCE_ADMIN_CLIENT_PREFIX = "source.admin.";
-    private static final String TARGET_ADMIN_CLIENT_PREFIX = "target.admin.";
+    protected static final String SOURCE_PREFIX = "src.kafka.";
+    protected static final String TARGET_PREFIX = "dest.kafka.";
+    protected static final String SRC_CONSUMER_PREFIX = "src.consumer.";
+    protected static final String ADMIN_CLIENT_PREFIX = "admin.";
+    protected static final String SOURCE_ADMIN_CLIENT_PREFIX = "source.admin.";
+    protected static final String TARGET_ADMIN_CLIENT_PREFIX = "target.admin.";
 
     private static void addConnectorOptions(ConfigDef configDef) {
 

@@ -61,14 +61,13 @@ public class MonitorAdmin extends Thread implements Runnable {
     private Pattern topicPattern;
     
     private long pollIntervalMs;
-    private final PartitionAssignor assignor = new RoundRobinAssignor();
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     private volatile List<TopicPartition> currentTopicPartitions = new ArrayList<>();
     private volatile Set<String>  sourceTopics = null;
     private volatile Set<String> targetTopics = null;
 
-    private MonitorAdmin(ConnectorContext context_,
+    protected MonitorAdmin(ConnectorContext context_,
                          String connectorName_,
                          Set<String> blackListTopics_,
                          Set<String> whiteListTopics_,
@@ -187,7 +186,14 @@ public class MonitorAdmin extends Thread implements Runnable {
 
     }
 
-    private Set<String> topicsToNotReplicate(Set<String> source, Set<String> target){
+    /**
+     * get list fo topics to not replicate as does't exists on target cluster
+     * @param source
+     * @param target
+     * @return
+     */
+
+    protected Set<String> topicsToNotReplicate(Set<String> source, Set<String> target){
         Set<String> topics = new HashSet<>();
         source.forEach(x -> {
             if(!target.contains( ConnectHelper.renameTopic(TOPIC_RENAME_FORMAT_CONFIG, x))){
